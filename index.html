@@ -44,7 +44,6 @@
         @keyframes scaleIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
         @keyframes bounceShort { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
         
-        /* Hide scrollbar for category chips */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
@@ -90,6 +89,8 @@
             appId: "1:895688155864:web:b623376af905cebb336dad",
             measurementId: "G-N1H3PFV1B5"
         };
+        
+        const RESEND_API_KEY = "re_MGqgRThM_MbPoMWnbmcQQAhAS26YsXHco"; 
 
         const app = initializeApp(firebaseConfig);
         const analytics = getAnalytics(app);
@@ -195,7 +196,7 @@
         function App() {
             const [user, setUser] = useState(null);
             const [loading, setLoading] = useState(true);
-            const [view, setView] = useState('store'); // store, cart, admin, history
+            const [view, setView] = useState('store');
             const [products, setProducts] = useState([]);
             const [orders, setOrders] = useState([]);
             const [cart, setCart] = useState({}); 
@@ -225,13 +226,11 @@
 
             // --- Effects ---
             
-            // Dark Mode
             useEffect(() => {
                 if (darkMode) document.documentElement.classList.add('dark');
                 else document.documentElement.classList.remove('dark');
             }, [darkMode]);
 
-            // Auth
             useEffect(() => {
                 const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
                     setUser(currentUser);
@@ -242,25 +241,17 @@
                 return () => unsubscribe();
             }, []);
 
-            // Data Fetching
             useEffect(() => {
                 if (!user) return;
                 const unsubProducts = onSnapshot(query(collection(db, 'products')), (snapshot) => {
                     setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                 });
                 
-                // Fetch ALL orders for admin, or USER orders for history
-                const ordersQuery = isAdmin 
-                    ? query(collection(db, 'orders'), orderBy('createdAt', 'desc'))
-                    : query(collection(db, 'orders'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'));
-                
-                // Note: Compound queries like where+orderBy require index in Firestore. 
-                // Fallback: If index missing, fetch all then filter in client for this demo to avoid error.
-                // For production: Create index in Firebase Console.
                 const unsubOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
                     let items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    // Client-side sort/filter to handle potential missing index gracefully
-                    if (!isAdmin) items = items.filter(o => o.userId === user.uid);
+                    if (!isAdmin) {
+                        items = items.filter(o => o.userId === user.uid);
+                    }
                     items.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
                     setOrders(items);
                 });
@@ -268,7 +259,6 @@
                 return () => { unsubProducts(); unsubOrders(); };
             }, [user, isAdmin]);
 
-            // --- Derived State ---
             const categories = useMemo(() => {
                 const cats = new Set(products.map(p => p.category || 'General'));
                 return ['All', ...Array.from(cats)];
@@ -298,6 +288,39 @@
                 catch (err) { setAuthError("Google Sign-In failed."); }
             };
 
+            // --- Email Trigger with Resend ---
+            const triggerEmail = async (to, subject, htmlContent) => {
+                // 1. Show UI Notification
+                setNotifications(p => [...p, { id: Date.now(), message: `Email to ${to}: ${subject}` }]);
+
+                // 2. Attempt Resend Call
+                try {
+                    console.log("Attempting to send email via Resend...");
+                    const res = await fetch('https://api.resend.com/emails', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${RESEND_API_KEY}`
+                        },
+                        body: JSON.stringify({
+                            from: 'noreply@auto.eugeneevons.com', // UPDATED: Custom Domain
+                            to: [to], 
+                            subject: subject,
+                            html: `<p>${htmlContent}</p>`
+                        })
+                    });
+                    
+                    if (res.ok) {
+                        console.log("Resend API Success");
+                    } else {
+                        const err = await res.json();
+                        console.warn("Resend API Response (Expected in browser):", err);
+                    }
+                } catch (e) {
+                    console.warn("Resend API Network Error (CORS is expected in browser):", e);
+                }
+            };
+
             const addToCart = (product) => {
                 if (product.stock <= (cart[product.id] || 0)) {
                     alert("No more stock available!");
@@ -307,16 +330,36 @@
                 setCartPopup(product.name); 
             };
 
+            const updateCartQuantity = (id, delta) => {
+                setCart(prev => {
+                    const currentQty = prev[id] || 0;
+                    const newQty = currentQty + delta;
+                    if (newQty <= 0) {
+                        const newCart = { ...prev };
+                        delete newCart[id];
+                        return newCart;
+                    }
+                    if (delta > 0) {
+                        const product = products.find(p => p.id === id);
+                        if (product && newQty > product.stock) return prev;
+                    }
+                    return { ...prev, [id]: newQty };
+                });
+            };
+
             const handleCheckout = async () => {
                 if (!user) return;
-                const orderItems = Object.entries(cart).map(([id, qty]) => {
-                    const product = products.find(p => p.id === id);
-                    return { productId: id, name: product.name, price: product.price, quantity: qty };
-                });
-                const total = Object.entries(cart).reduce((acc, [id, qty]) => {
-                     const p = products.find(prod => prod.id === id);
-                     return acc + (p ? p.price * qty : 0);
-                }, 0);
+                
+                const orderItems = Object.entries(cart)
+                    .map(([id, qty]) => {
+                        const product = products.find(p => p.id === id);
+                        return { productId: id, name: product?.name || 'Item', price: product?.price || 0, quantity: qty };
+                    })
+                    .filter(item => item.quantity > 0);
+                
+                if (orderItems.length === 0) return;
+
+                const total = orderItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
                 try {
                     await runTransaction(db, async (t) => {
@@ -343,6 +386,10 @@
                     setCart({});
                     setView('store');
                     setCheckoutSuccess({ total }); 
+                    
+                    // Trigger Resend
+                    triggerEmail(user.email, "Order Confirmation", `Your order for $${total} has been placed. Please pay at the counter.`);
+
                 } catch (e) { alert("Checkout failed: " + e); }
             };
 
@@ -379,15 +426,11 @@
             const handleStatusChange = async (orderId, newStatus, email) => {
                 if (!isAdmin) return;
                 await updateDoc(doc(db, 'orders', orderId), { status: newStatus });
-                triggerEmail(email, "Status Update", `Your order is now: ${newStatus}`);
+                triggerEmail(email, "Order Status Update", `Your order status is now: ${newStatus}`);
             };
 
             const handleDeleteProduct = async (id) => {
                 if (confirm('Delete this product?')) await deleteDoc(doc(db, 'products', id));
-            };
-
-            const triggerEmail = (to, sub, msg) => {
-                setNotifications(p => [...p, { id: Date.now(), message: `${sub}: ${msg}` }]);
             };
 
             // --- Render ---
@@ -419,13 +462,17 @@
                     <nav className="bg-white dark:bg-dark shadow-sm sticky top-0 z-40 border-b dark:border-gray-800">
                         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
                             <div className="flex items-center gap-2 sm:gap-4">
-                                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 cursor-pointer" onClick={()=>setView('store')}>
                                     <Icons.Logo />
                                     <span className="font-bold text-xl hidden sm:block text-gray-900 dark:text-white">Order.Now</span>
                                 </div>
                                 <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1 ml-2 sm:ml-4">
                                     <button onClick={()=>setView('store')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${view==='store'?'bg-white dark:bg-gray-700 shadow dark:text-white':'text-gray-500 dark:text-gray-400'}`}>Store</button>
-                                    {!isAdmin && <button onClick={()=>setView('history')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${view==='history'?'bg-white dark:bg-gray-700 shadow dark:text-white':'text-gray-500 dark:text-gray-400'}`}>Orders</button>}
+                                    {!isAdmin && (
+                                        <button onClick={()=>setView('history')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${view==='history'?'bg-white dark:bg-gray-700 shadow dark:text-white':'text-gray-500 dark:text-gray-400'}`}>
+                                            My Orders
+                                        </button>
+                                    )}
                                     {isAdmin && <button onClick={()=>setView('admin')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${view==='admin'?'bg-white dark:bg-gray-700 shadow dark:text-white':'text-gray-500 dark:text-gray-400'}`}>Admin</button>}
                                 </div>
                             </div>
@@ -513,9 +560,9 @@
                                                     <img src={p.image} className="w-16 h-16 rounded-lg object-cover bg-gray-100"/>
                                                     <div className="flex-1"><h4 className="font-medium text-gray-900 dark:text-white">{p.name}</h4><p className="text-sm text-gray-500 dark:text-gray-400">${p.price}</p></div>
                                                     <div className="flex items-center gap-3">
-                                                        <button onClick={()=>setCart(prev=>({...prev, [id]: qty-1 || delete prev[id] && 0}))} className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center dark:text-white">-</button>
+                                                        <button onClick={()=>updateCartQuantity(id, -1)} className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center dark:text-white">-</button>
                                                         <span className="w-6 text-center text-sm font-medium dark:text-white">{qty}</span>
-                                                        <button onClick={()=>p.stock > qty && setCart(prev=>({...prev, [id]: qty+1}))} className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center dark:text-white">+</button>
+                                                        <button onClick={()=>updateCartQuantity(id, 1)} className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center dark:text-white">+</button>
                                                     </div>
                                                     <div className="text-right w-20 font-bold text-gray-900 dark:text-white">${(p.price*qty).toFixed(2)}</div>
                                                 </div>
