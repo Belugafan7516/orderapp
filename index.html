@@ -91,7 +91,6 @@
         };
         
         // --- API CONFIGURATION ---
-        // Your specific Cloudflare Worker URL
         const CLOUDFLARE_WORKER_URL = "https://Order-worker.powerstudios.workers.dev"; 
 
         const app = initializeApp(firebaseConfig);
@@ -212,6 +211,7 @@
             // Popups
             const [cartPopup, setCartPopup] = useState(null); 
             const [checkoutSuccess, setCheckoutSuccess] = useState(null);
+            const [errorPopup, setErrorPopup] = useState(null); // Replaces alert()
 
             // Login State
             const [email, setEmail] = useState('');
@@ -290,9 +290,7 @@
                 catch (err) { setAuthError("Google Sign-In failed."); }
             };
 
-            // --- CLOUDFLARE WORKER EMAIL TRIGGER ---
             const triggerEmail = async (to, subject, htmlContent) => {
-                // Show notification immediately
                 setNotifications(p => [...p, { id: Date.now(), message: `Sending confirmation email to ${to}...` }]);
 
                 try {
@@ -314,7 +312,7 @@
 
             const addToCart = (product) => {
                 if (product.stock <= (cart[product.id] || 0)) {
-                    alert("No more stock available!");
+                    setErrorPopup("No more stock available for this item!");
                     return;
                 }
                 setCart(prev => ({ ...prev, [product.id]: (prev[product.id] || 0) + 1 }));
@@ -354,14 +352,32 @@
 
                 try {
                     await runTransaction(db, async (t) => {
-                        for (const item of orderItems) {
-                            const ref = doc(db, 'products', item.productId);
-                            const snap = await t.get(ref);
-                            if (!snap.exists()) throw "Product removed";
-                            const newStock = snap.data().stock - item.quantity;
-                            if (newStock < 0) throw `Insufficient stock: ${item.name}`;
-                            t.update(ref, { stock: newStock });
+                        // 1. Prepare all READS first (Required by Firestore)
+                        const productRefs = orderItems.map(item => doc(db, 'products', item.productId));
+                        const productSnaps = [];
+                        
+                        // We must await each get() inside the transaction context
+                        for (const ref of productRefs) {
+                            productSnaps.push(await t.get(ref));
                         }
+
+                        // 2. Perform Logic & Writes
+                        productSnaps.forEach((snap, index) => {
+                            const item = orderItems[index];
+                            if (!snap.exists()) {
+                                throw new Error(`Product "${item.name}" has been removed.`);
+                            }
+                            
+                            const currentStock = snap.data().stock;
+                            if (currentStock < item.quantity) {
+                                throw new Error(`Insufficient stock for "${item.name}". Only ${currentStock} left.`);
+                            }
+                            
+                            // Queue update
+                            t.update(productRefs[index], { stock: currentStock - item.quantity });
+                        });
+
+                        // Queue creation
                         const newOrderRef = doc(collection(db, 'orders'));
                         t.set(newOrderRef, {
                             userId: user.uid,
@@ -378,7 +394,6 @@
                     setView('store');
                     setCheckoutSuccess({ total }); 
                     
-                    // Trigger Email via Worker
                     triggerEmail(user.email, "Order Confirmation - Order.Now", `
                         <h1>Order Confirmation</h1>
                         <p>Thank you for your order!</p>
@@ -388,7 +403,10 @@
                         <p style="font-size: 12px; color: #666;">This is an automated message from Order.Now</p>
                     `);
 
-                } catch (e) { alert("Checkout failed: " + e); }
+                } catch (e) {
+                    // Use Popup instead of alert
+                    setErrorPopup(e.message || "An unexpected error occurred during checkout.");
+                }
             };
 
             // --- Admin Handlers ---
@@ -406,7 +424,10 @@
                     if (editingId) await updateDoc(doc(db, 'products', editingId), data);
                     else await addDoc(collection(db, 'products'), { ...data, createdAt: serverTimestamp() });
                     closeForm();
-                } catch (error) { console.error("Error saving:", error); }
+                } catch (error) { 
+                    console.error("Error saving:", error);
+                    setErrorPopup("Failed to save product. " + error.message);
+                }
             };
 
             const handleEditClick = (product) => {
@@ -423,22 +444,32 @@
 
             const handleStatusChange = async (orderId, newStatus, email) => {
                 if (!isAdmin) return;
-                await updateDoc(doc(db, 'orders', orderId), { status: newStatus });
-                
-                let message = "";
-                if (newStatus === 'paid') message = "Thank you for your payment! Your order is being processed.";
-                else if (newStatus === 'refunded') message = "A refund has been processed for your order.";
-                else message = `Your order status has been updated to: ${newStatus}`;
+                try {
+                    await updateDoc(doc(db, 'orders', orderId), { status: newStatus });
+                    
+                    let message = "";
+                    if (newStatus === 'paid') message = "Thank you for your payment! Your order is being processed.";
+                    else if (newStatus === 'refunded') message = "A refund has been processed for your order.";
+                    else message = `Your order status has been updated to: ${newStatus}`;
 
-                triggerEmail(email, `Order Update: ${newStatus.toUpperCase()}`, `
-                    <h2>Order Update</h2>
-                    <p>${message}</p>
-                    <p>Status: <strong>${newStatus.toUpperCase()}</strong></p>
-                `);
+                    triggerEmail(email, `Order Update: ${newStatus.toUpperCase()}`, `
+                        <h2>Order Update</h2>
+                        <p>${message}</p>
+                        <p>Status: <strong>${newStatus.toUpperCase()}</strong></p>
+                    `);
+                } catch (e) {
+                    setErrorPopup("Failed to update status: " + e.message);
+                }
             };
 
             const handleDeleteProduct = async (id) => {
-                if (confirm('Delete this product?')) await deleteDoc(doc(db, 'products', id));
+                if (confirm('Delete this product?')) {
+                    try {
+                        await deleteDoc(doc(db, 'products', id));
+                    } catch (e) {
+                        setErrorPopup("Failed to delete product: " + e.message);
+                    }
+                }
             };
 
             // --- Render ---
@@ -739,6 +770,18 @@
                             <Button onClick={()=>setCheckoutSuccess(null)} className="w-full !py-3 !text-lg !rounded-xl shadow-lg shadow-blue-200 dark:shadow-none">
                                 Got it, thanks!
                             </Button>
+                        </div>
+                    </Modal>
+
+                    {/* ERROR MODAL (Replaces Alerts) */}
+                    <Modal isOpen={!!errorPopup} onClose={()=>setErrorPopup(null)}>
+                        <div className="text-center">
+                            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600 dark:text-red-400">
+                                <Icons.XCircle size={24} />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Something went wrong</h3>
+                            <p className="text-gray-500 dark:text-gray-400 mb-6">{errorPopup}</p>
+                            <Button onClick={()=>setErrorPopup(null)} className="w-full" variant="secondary">Close</Button>
                         </div>
                     </Modal>
 
