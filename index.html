@@ -22,6 +22,7 @@
         body { font-family: 'Inter', sans-serif; }
         .animate-fade-in { animation: fadeIn 0.3s ease-out; }
         .animate-slide-up { animation: slideUp 0.4s ease-out; }
+        .animate-scale-in { animation: scaleIn 0.2s ease-out; }
         
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -31,13 +32,17 @@
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes scaleIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-900">
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        // --- Firebase Imports (CDN for browser usage) ---
+        // --- Firebase Imports ---
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
         import { getAnalytics } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js';
         import { 
@@ -63,7 +68,7 @@
             deleteDoc
         } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
-        // --- User's Firebase Configuration ---
+        // --- Configuration ---
         const firebaseConfig = {
             apiKey: "AIzaSyD5fscbqUTJIo0EKfz5mdi5qScQ8kiOhRs",
             authDomain: "order-now-backend.firebaseapp.com",
@@ -74,9 +79,8 @@
             measurementId: "G-N1H3PFV1B5"
         };
 
-        // --- Initialization ---
         const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app); // Initialized as requested
+        const analytics = getAnalytics(app);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
@@ -91,22 +95,22 @@
             Mail: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>,
             XCircle: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>,
             LayoutDashboard: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>,
-            AlertCircle: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>,
+            Edit: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>,
+            Check: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
             Package: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22v-9"/></svg>
         };
 
         const { useState, useEffect } = React;
 
-        // --- Constants ---
         const ADMIN_EMAIL = 'admin@eugeneevons.com';
 
-        // --- UI Components ---
+        // --- Components ---
 
         const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false, type = 'button' }) => {
             const baseStyle = "px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2";
             const variants = {
-                primary: "bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300",
-                secondary: "bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:bg-gray-50",
+                primary: "bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300 shadow-sm",
+                secondary: "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:bg-gray-50",
                 danger: "bg-red-50 text-red-600 hover:bg-red-100",
                 success: "bg-green-50 text-green-600 hover:bg-green-100",
                 outline: "border border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -137,18 +141,14 @@
             </div>
         );
 
-        const Badge = ({ children, color = 'gray' }) => {
-            const colors = {
-                gray: 'bg-gray-100 text-gray-800',
-                green: 'bg-green-100 text-green-800',
-                blue: 'bg-blue-100 text-blue-800',
-                yellow: 'bg-yellow-100 text-yellow-800',
-                red: 'bg-red-100 text-red-800',
-            };
+        const Modal = ({ isOpen, onClose, children }) => {
+            if (!isOpen) return null;
             return (
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[color]}`}>
-                    {children}
-                </span>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 animate-scale-in relative">
+                        {children}
+                    </div>
+                </div>
             );
         };
 
@@ -164,7 +164,7 @@
                         <Icons.Mail size={20} className="text-blue-600" />
                     </div>
                     <div>
-                        <h4 className="font-semibold text-sm text-gray-900">Email Notification Sent</h4>
+                        <h4 className="font-semibold text-sm text-gray-900">Notification</h4>
                         <p className="text-xs text-gray-600">{message}</p>
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-2">
@@ -174,7 +174,7 @@
             );
         };
 
-        // --- Main Application ---
+        // --- Main App ---
         function App() {
             const [user, setUser] = useState(null);
             const [loading, setLoading] = useState(true);
@@ -184,19 +184,23 @@
             const [cart, setCart] = useState({}); 
             const [notifications, setNotifications] = useState([]);
             
-            // Login Form
+            // Popups
+            const [cartPopup, setCartPopup] = useState(null); // stores product name if popup open
+
+            // Login State
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
             const [isRegistering, setIsRegistering] = useState(false);
             const [authError, setAuthError] = useState('');
 
-            // Admin Form
-            const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '', image: '', category: '' });
-            const [isAddingProduct, setIsAddingProduct] = useState(false);
+            // Admin State
+            const [productForm, setProductForm] = useState({ name: '', price: '', stock: '', image: '', category: '' });
+            const [editingId, setEditingId] = useState(null); // null = adding, string = editing
+            const [isFormOpen, setIsFormOpen] = useState(false);
 
             const isAdmin = user?.email === ADMIN_EMAIL;
 
-            // Auth & Data Listeners
+            // --- Effects ---
             useEffect(() => {
                 const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
                     setUser(currentUser);
@@ -209,57 +213,29 @@
 
             useEffect(() => {
                 if (!user) return;
-
-                // Products Query (Using Root Collection 'products')
-                const productsQuery = query(collection(db, 'products'));
-                const unsubProducts = onSnapshot(productsQuery, (snapshot) => {
-                    const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    setProducts(items);
-                }, (err) => console.error("Products error", err));
-
-                // Orders Query (Using Root Collection 'orders')
-                const ordersQuery = query(
-                    collection(db, 'orders'),
-                    orderBy('createdAt', 'desc')
-                );
-                const unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
-                    const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    setOrders(items);
-                }, (err) => console.error("Orders error", err));
-
-                return () => {
-                    unsubProducts();
-                    unsubOrders();
-                };
+                const unsubProducts = onSnapshot(query(collection(db, 'products')), (snapshot) => {
+                    setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                });
+                const unsubOrders = onSnapshot(query(collection(db, 'orders'), orderBy('createdAt', 'desc')), (snapshot) => {
+                    setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                });
+                return () => { unsubProducts(); unsubOrders(); };
             }, [user]);
 
-            // Handlers
+            // --- Handlers ---
+
             const handleAuth = async (e) => {
                 e.preventDefault();
                 setAuthError('');
                 try {
-                    if (isRegistering) {
-                        await createUserWithEmailAndPassword(auth, email, password);
-                    } else {
-                        await signInWithEmailAndPassword(auth, email, password);
-                    }
-                } catch (err) {
-                    setAuthError(err.message);
-                }
+                    if (isRegistering) await createUserWithEmailAndPassword(auth, email, password);
+                    else await signInWithEmailAndPassword(auth, email, password);
+                } catch (err) { setAuthError(err.message); }
             };
 
             const handleGoogleLogin = async () => {
-                try {
-                    const provider = new GoogleAuthProvider();
-                    await signInWithPopup(auth, provider);
-                } catch (err) {
-                    setAuthError("Google Sign-In failed or popup blocked. Ensure the domain is authorized in Firebase Console.");
-                }
-            };
-
-            const handleLogout = async () => {
-                await signOut(auth);
-                setCart({});
+                try { await signInWithPopup(auth, new GoogleAuthProvider()); } 
+                catch (err) { setAuthError("Google Sign-In failed."); }
             };
 
             const addToCart = (product) => {
@@ -267,40 +243,8 @@
                     alert("No more stock available!");
                     return;
                 }
-                setCart(prev => ({
-                    ...prev,
-                    [product.id]: (prev[product.id] || 0) + 1
-                }));
-            };
-
-            const removeFromCart = (productId) => {
-                setCart(prev => {
-                    const newCart = { ...prev };
-                    delete newCart[productId];
-                    return newCart;
-                });
-            };
-
-            const updateCartQuantity = (productId, delta) => {
-                setCart(prev => {
-                    const current = prev[productId] || 0;
-                    const newQty = current + delta;
-                    if (newQty <= 0) {
-                        const newCart = { ...prev };
-                        delete newCart[productId];
-                        return newCart;
-                    }
-                    const product = products.find(p => p.id === productId);
-                    if (product && newQty > product.stock) return prev;
-                    return { ...prev, [productId]: newQty };
-                });
-            };
-
-            const calculateTotal = () => {
-                return Object.entries(cart).reduce((total, [id, qty]) => {
-                    const product = products.find(p => p.id === id);
-                    return total + (product ? product.price * qty : 0);
-                }, 0);
+                setCart(prev => ({ ...prev, [product.id]: (prev[product.id] || 0) + 1 }));
+                setCartPopup(product.name); // Open popup
             };
 
             const handleCheckout = async () => {
@@ -309,27 +253,26 @@
                     const product = products.find(p => p.id === id);
                     return { productId: id, name: product.name, price: product.price, quantity: qty };
                 });
-                const totalAmount = calculateTotal();
+                const total = Object.entries(cart).reduce((acc, [id, qty]) => {
+                     const p = products.find(prod => prod.id === id);
+                     return acc + (p ? p.price * qty : 0);
+                }, 0);
 
                 try {
-                    await runTransaction(db, async (transaction) => {
+                    await runTransaction(db, async (t) => {
                         for (const item of orderItems) {
-                            // Using Root Collection 'products'
-                            const sfDocRef = doc(db, 'products', item.productId);
-                            const sfDoc = await transaction.get(sfDocRef);
-                            if (!sfDoc.exists()) throw "Product does not exist!";
-                            const newStock = sfDoc.data().stock - item.quantity;
-                            if (newStock < 0) throw `Insufficient stock for ${item.name}`;
-                            transaction.update(sfDocRef, { stock: newStock });
+                            const ref = doc(db, 'products', item.productId);
+                            const snap = await t.get(ref);
+                            if (!snap.exists()) throw "Product removed";
+                            const newStock = snap.data().stock - item.quantity;
+                            if (newStock < 0) throw `Insufficient stock: ${item.name}`;
+                            t.update(ref, { stock: newStock });
                         }
-
-                        // Using Root Collection 'orders'
-                        const orderRef = doc(collection(db, 'orders'));
-                        transaction.set(orderRef, {
+                        t.set(doc(collection(db, 'orders')), {
                             userId: user.uid,
                             userEmail: user.email,
                             items: orderItems,
-                            total: totalAmount,
+                            total: total,
                             status: 'pending_payment',
                             paymentMethod: 'counter',
                             createdAt: serverTimestamp()
@@ -337,278 +280,262 @@
                     });
                     setCart({});
                     setView('store');
-                    triggerEmail(user.email, "Order Confirmation", `Order placed successfully. Please pay $${totalAmount} at the counter.`);
-                } catch (e) {
-                    alert("Checkout failed: " + e);
-                }
+                    triggerEmail(user.email, "Order Placed", `Please pay $${total} at the counter.`);
+                } catch (e) { alert("Checkout failed: " + e); }
             };
 
-            const handleAddProduct = async (e) => {
+            // --- Admin Handlers ---
+
+            const handleSaveProduct = async (e) => {
                 e.preventDefault();
                 if (!isAdmin) return;
+                const data = {
+                    name: productForm.name,
+                    price: parseFloat(productForm.price),
+                    stock: parseInt(productForm.stock),
+                    image: productForm.image || 'https://placehold.co/400x300?text=Product',
+                    category: productForm.category || 'General',
+                };
+
                 try {
-                    await addDoc(collection(db, 'products'), {
-                        name: newProduct.name,
-                        price: parseFloat(newProduct.price),
-                        stock: parseInt(newProduct.stock),
-                        image: newProduct.image || 'https://placehold.co/400x300?text=Product',
-                        category: newProduct.category || 'General',
-                        createdAt: serverTimestamp()
-                    });
-                    setNewProduct({ name: '', price: '', stock: '', image: '', category: '' });
-                    setIsAddingProduct(false);
-                } catch (error) { console.error("Error adding product: ", error); }
+                    if (editingId) {
+                        await updateDoc(doc(db, 'products', editingId), data);
+                    } else {
+                        await addDoc(collection(db, 'products'), { ...data, createdAt: serverTimestamp() });
+                    }
+                    closeForm();
+                } catch (error) { console.error("Error saving:", error); }
             };
 
-            const handleStatusChange = async (orderId, newStatus, customerEmail) => {
+            const handleEditClick = (product) => {
+                setProductForm({
+                    name: product.name,
+                    price: product.price,
+                    stock: product.stock,
+                    image: product.image,
+                    category: product.category
+                });
+                setEditingId(product.id);
+                setIsFormOpen(true);
+            };
+
+            const closeForm = () => {
+                setProductForm({ name: '', price: '', stock: '', image: '', category: '' });
+                setEditingId(null);
+                setIsFormOpen(false);
+            };
+
+            const handleStatusChange = async (orderId, newStatus, email) => {
                 if (!isAdmin) return;
-                try {
-                    const orderRef = doc(db, 'orders', orderId);
-                    await updateDoc(orderRef, { status: newStatus });
-                    let message = `Your order status is now: ${newStatus}`;
-                    if (newStatus === 'refunded') message = "A refund has been initiated.";
-                    triggerEmail(customerEmail, `Order Update: ${newStatus}`, message);
-                } catch (error) { console.error("Error updating status:", error); }
+                await updateDoc(doc(db, 'orders', orderId), { status: newStatus });
+                triggerEmail(email, "Status Update", `Your order is now: ${newStatus}`);
             };
 
-            const handleDeleteProduct = async (productId) => {
-                if (!isAdmin) return;
-                if (confirm('Delete this product?')) {
-                    await deleteDoc(doc(db, 'products', productId));
-                }
+            const handleDeleteProduct = async (id) => {
+                if (confirm('Delete this product?')) await deleteDoc(doc(db, 'products', id));
             };
 
-            const triggerEmail = (to, subject, body) => {
-                const id = Date.now();
-                setNotifications(prev => [...prev, { id, message: `To: ${to} | ${subject}` }]);
+            const triggerEmail = (to, sub, msg) => {
+                setNotifications(p => [...p, { id: Date.now(), message: `${sub}: ${msg}` }]);
             };
 
-            // --- Render Logic ---
+            // --- Render ---
 
-            if (loading) return (
-                <div className="min-h-screen flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
+
+            if (view === 'login') return (
+                <div className="min-h-screen flex items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
+                        <div className="text-center mb-8">
+                            <div className="bg-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Icons.Store className="text-white w-8 h-8" /></div>
+                            <h1 className="text-2xl font-bold">Order.Now</h1>
+                        </div>
+                        <form onSubmit={handleAuth} className="space-y-4">
+                            <Input label="Email" type="email" value={email} onChange={e=>setEmail(e.target.value)} required />
+                            <Input label="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} required />
+                            {authError && <div className="text-red-500 text-sm">{authError}</div>}
+                            <Button type="submit" className="w-full">{isRegistering ? 'Sign Up' : 'Sign In'}</Button>
+                        </form>
+                        <div className="mt-4"><Button onClick={handleGoogleLogin} variant="outline" className="w-full">Google Sign In</Button></div>
+                        <p className="mt-6 text-center text-sm text-blue-600 cursor-pointer" onClick={()=>setIsRegistering(!isRegistering)}>{isRegistering ? 'Switch to Sign In' : 'Create Account'}</p>
+                    </div>
                 </div>
             );
 
-            if (view === 'login') {
-                return (
-                    <div className="min-h-screen flex items-center justify-center p-4">
-                        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
-                            <div className="text-center mb-8">
-                                <div className="bg-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <Icons.Store className="text-white w-8 h-8" />
-                                </div>
-                                <h1 className="text-2xl font-bold text-gray-900">Order.Now</h1>
-                                <p className="text-gray-500">Sign in to start ordering</p>
-                            </div>
-
-                            <form onSubmit={handleAuth} className="space-y-4">
-                                <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@eugeneevons.com" required />
-                                <Input label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required />
-                                {authError && <div className="text-red-500 text-sm bg-red-50 p-2 rounded">{authError}</div>}
-                                <Button type="submit" variant="primary" className="w-full">{isRegistering ? 'Create Account' : 'Sign In'}</Button>
-                            </form>
-
-                            <div className="mt-4 text-center">
-                                <span className="text-sm text-gray-500">Or continue with</span>
-                                <Button onClick={handleGoogleLogin} variant="outline" className="w-full mt-4">Google Sign In</Button>
-                            </div>
-
-                            <p className="mt-6 text-center text-sm text-gray-600">
-                                <button onClick={() => setIsRegistering(!isRegistering)} className="text-blue-600 font-medium hover:underline">
-                                    {isRegistering ? 'Switch to Sign In' : 'Create an Account'}
-                                </button>
-                            </p>
-                        </div>
-                    </div>
-                );
-            }
-
             return (
                 <div className="min-h-screen flex flex-col font-sans">
-                    {/* Navbar */}
                     <nav className="bg-white shadow-sm sticky top-0 z-40">
-                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                            <div className="flex justify-between h-16">
-                                <div className="flex items-center gap-4">
-                                    <Icons.Store className="text-blue-600" />
-                                    <span className="font-bold text-xl hidden sm:block">Eugene's Store</span>
-                                    <div className="flex bg-gray-100 rounded-lg p-1 ml-4">
-                                        <button onClick={() => setView('store')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${view === 'store' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}>Shop</button>
-                                        {isAdmin && <button onClick={() => setView('admin')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${view === 'admin' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}>Admin</button>}
-                                    </div>
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
+                            <div className="flex items-center gap-4">
+                                <Icons.Store className="text-blue-600" />
+                                <span className="font-bold text-xl hidden sm:block">Eugene's Store</span>
+                                <div className="flex bg-gray-100 rounded-lg p-1 ml-4">
+                                    <button onClick={()=>setView('store')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${view==='store'?'bg-white shadow':''}`}>Shop</button>
+                                    {isAdmin && <button onClick={()=>setView('admin')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${view==='admin'?'bg-white shadow':''}`}>Admin</button>}
                                 </div>
-                                <div className="flex items-center gap-4">
-                                    <button onClick={() => setView('cart')} className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-full">
-                                        <Icons.ShoppingCart size={24} />
-                                        {Object.keys(cart).length > 0 && <span className="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">{Object.values(cart).reduce((a,b)=>a+b,0)}</span>}
-                                    </button>
-                                    <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full" title="Sign Out"><Icons.LogOut size={20} /></button>
-                                </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <button onClick={()=>setView('cart')} className="relative p-2 hover:bg-gray-100 rounded-full">
+                                    <Icons.ShoppingCart size={24} />
+                                    {Object.keys(cart).length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">{Object.values(cart).reduce((a,b)=>a+b,0)}</span>}
+                                </button>
+                                <button onClick={()=>signOut(auth)} className="p-2 hover:text-red-600"><Icons.LogOut size={20} /></button>
                             </div>
                         </div>
                     </nav>
 
                     <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                        {/* STORE VIEW */}
+                        {/* STORE */}
                         {view === 'store' && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
                                 {products.map(product => (
-                                    <div key={product.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden border border-gray-100 flex flex-col">
-                                        <div className="h-48 overflow-hidden bg-gray-100 relative group">
-                                            <img src={product.image} alt={product.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" onError={(e) => e.target.src='https://placehold.co/400x300?text=No+Image'} />
-                                            {product.stock <= 0 && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><span className="text-white font-bold px-4 py-1 bg-red-600 rounded-full text-sm">Out of Stock</span></div>}
+                                    <div key={product.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden border border-gray-100 flex flex-col">
+                                        <div className="h-48 relative group">
+                                            <img src={product.image} className="w-full h-full object-cover" onError={(e)=>e.target.src='https://placehold.co/400x300'} />
+                                            {product.stock <= 0 && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><span className="text-white font-bold px-3 py-1 bg-red-600 rounded-full text-sm">Out of Stock</span></div>}
                                         </div>
                                         <div className="p-5 flex-1 flex flex-col">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div>
-                                                    <h3 className="font-semibold text-lg text-gray-900">{product.name}</h3>
-                                                    <p className="text-sm text-gray-500">{product.category}</p>
-                                                </div>
-                                                <span className="font-bold text-lg text-blue-600">${product.price}</span>
+                                            <div className="flex justify-between mb-2">
+                                                <div><h3 className="font-semibold">{product.name}</h3><p className="text-xs text-gray-500">{product.category}</p></div>
+                                                <span className="font-bold text-blue-600">${product.price}</span>
                                             </div>
-                                            <div className="mt-auto pt-4 flex items-center justify-between border-t border-gray-50">
-                                                <span className={`text-sm ${product.stock < 5 ? 'text-red-500 font-medium' : 'text-gray-500'}`}>{product.stock} left</span>
-                                                <Button onClick={() => addToCart(product)} disabled={product.stock <= 0} variant="primary" className="!px-3 !py-1.5 !text-sm"><Icons.Plus size={16} /> Add</Button>
+                                            <div className="mt-auto pt-4 flex justify-between items-center border-t border-gray-50">
+                                                <span className={`text-xs ${product.stock<5?'text-red-500 font-bold':'text-gray-500'}`}>{product.stock} in stock</span>
+                                                <Button onClick={()=>addToCart(product)} disabled={product.stock<=0} variant="primary" className="!py-1.5 !px-3 !text-xs"><Icons.Plus size={14}/> Add</Button>
                                             </div>
                                         </div>
                                     </div>
                                 ))}
-                                {products.length === 0 && <div className="col-span-full text-center py-20 text-gray-400"><Icons.Package size={48} className="mx-auto mb-4 opacity-20" /><p>No products available.</p></div>}
                             </div>
                         )}
 
-                        {/* CART VIEW */}
+                        {/* CART */}
                         {view === 'cart' && (
-                            <div className="max-w-3xl mx-auto animate-fade-in">
-                                <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><Icons.ShoppingCart /> Cart</h2>
-                                {Object.keys(cart).length === 0 ? (
-                                    <div className="bg-white p-10 rounded-xl shadow-sm text-center">
-                                        <p className="text-gray-500 mb-6">Your cart is empty.</p>
-                                        <Button onClick={() => setView('store')}>Start Shopping</Button>
-                                    </div>
-                                ) : (
+                            <div className="max-w-2xl mx-auto animate-fade-in">
+                                <h2 className="text-2xl font-bold mb-6">Shopping Cart</h2>
+                                {Object.keys(cart).length === 0 ? <div className="text-center py-10 text-gray-500">Cart is empty</div> : (
                                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                                        <div className="divide-y divide-gray-100">
-                                            {Object.entries(cart).map(([id, qty]) => {
-                                                const product = products.find(p => p.id === id);
-                                                if (!product) return null;
-                                                return (
-                                                    <div key={id} className="p-4 flex items-center gap-4">
-                                                        <img src={product.image} className="w-16 h-16 rounded-md object-cover bg-gray-100" />
-                                                        <div className="flex-1">
-                                                            <h4 className="font-medium">{product.name}</h4>
-                                                            <p className="text-sm text-gray-500">${product.price}</p>
-                                                        </div>
-                                                        <div className="flex items-center gap-3">
-                                                            <button onClick={() => updateCartQuantity(id, -1)} className="p-1 hover:bg-gray-100">-</button>
-                                                            <span className="font-medium">{qty}</span>
-                                                            <button onClick={() => updateCartQuantity(id, 1)} className="p-1 hover:bg-gray-100">+</button>
-                                                        </div>
-                                                        <div className="text-right w-20 font-bold">${(product.price * qty).toFixed(2)}</div>
-                                                        <button onClick={() => removeFromCart(id)} className="text-gray-400 hover:text-red-500 ml-2"><Icons.Trash2 size={18} /></button>
+                                        {Object.entries(cart).map(([id, qty]) => {
+                                            const p = products.find(x => x.id === id);
+                                            return p ? (
+                                                <div key={id} className="p-4 flex items-center gap-4 border-b border-gray-100 last:border-0">
+                                                    <img src={p.image} className="w-12 h-12 rounded object-cover bg-gray-100"/>
+                                                    <div className="flex-1"><h4 className="font-medium">{p.name}</h4><p className="text-xs text-gray-500">${p.price}</p></div>
+                                                    <div className="flex items-center gap-2">
+                                                        <button onClick={()=>setCart(prev=>({...prev, [id]: qty-1 || delete prev[id] && 0}))} className="w-6 h-6 bg-gray-100 rounded">-</button>
+                                                        <span className="w-6 text-center text-sm">{qty}</span>
+                                                        <button onClick={()=>p.stock > qty && setCart(prev=>({...prev, [id]: qty+1}))} className="w-6 h-6 bg-gray-100 rounded">+</button>
                                                     </div>
-                                                );
-                                            })}
-                                        </div>
-                                        <div className="bg-gray-50 p-6">
-                                            <div className="flex justify-between items-center mb-6">
-                                                <span className="text-gray-600">Total Amount</span>
-                                                <span className="text-2xl font-bold text-gray-900">${calculateTotal().toFixed(2)}</span>
-                                            </div>
-                                            <div className="flex justify-end gap-3">
-                                                <Button variant="secondary" onClick={() => setView('store')}>Continue Shopping</Button>
-                                                <Button onClick={handleCheckout}>Confirm Order</Button>
-                                            </div>
+                                                    <div className="text-right w-16 font-bold text-sm">${(p.price*qty).toFixed(2)}</div>
+                                                </div>
+                                            ) : null;
+                                        })}
+                                        <div className="bg-gray-50 p-6 flex justify-between items-center">
+                                            <div><p className="text-gray-500 text-sm">Total</p><p className="text-2xl font-bold">${Object.entries(cart).reduce((acc,[id,q])=>{const p=products.find(x=>x.id===id);return acc+(p?p.price*q:0)},0).toFixed(2)}</p></div>
+                                            <Button onClick={handleCheckout}>Checkout</Button>
                                         </div>
                                     </div>
                                 )}
                             </div>
                         )}
 
-                        {/* ADMIN VIEW */}
+                        {/* ADMIN */}
                         {view === 'admin' && isAdmin && (
                             <div className="space-y-8 animate-fade-in">
                                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                                     <div className="flex justify-between items-center mb-6">
                                         <h2 className="text-xl font-bold flex items-center gap-2"><Icons.LayoutDashboard /> Dashboard</h2>
-                                        <Button onClick={() => setIsAddingProduct(!isAddingProduct)} variant="outline">{isAddingProduct ? 'Cancel' : 'Add Product'}</Button>
+                                        <Button onClick={() => { closeForm(); setIsFormOpen(!isFormOpen); }} variant="outline">
+                                            {isFormOpen ? 'Cancel' : 'Add Product'}
+                                        </Button>
                                     </div>
 
-                                    {isAddingProduct && (
-                                        <div className="bg-gray-50 p-6 rounded-xl mb-8 border border-gray-200">
-                                            <form onSubmit={handleAddProduct} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <Input label="Name" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} required />
-                                                <Input label="Price" type="number" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} required />
-                                                <Input label="Stock" type="number" value={newProduct.stock} onChange={e => setNewProduct({...newProduct, stock: e.target.value})} required />
-                                                <Input label="Category" value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})} />
-                                                <div className="md:col-span-2"><Input label="Image URL" value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} /></div>
-                                                <div className="md:col-span-2"><Button type="submit" className="w-full">Save</Button></div>
+                                    {/* Edit/Add Form */}
+                                    {isFormOpen && (
+                                        <div className="bg-gray-50 p-6 rounded-xl mb-8 border border-gray-200 animate-slide-up">
+                                            <h3 className="font-bold text-gray-700 mb-4">{editingId ? 'Edit Product' : 'Add New Product'}</h3>
+                                            <form onSubmit={handleSaveProduct} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <Input label="Name" value={productForm.name} onChange={e=>setProductForm({...productForm, name: e.target.value})} required />
+                                                <Input label="Price" type="number" value={productForm.price} onChange={e=>setProductForm({...productForm, price: e.target.value})} required />
+                                                <Input label="Stock" type="number" value={productForm.stock} onChange={e=>setProductForm({...productForm, stock: e.target.value})} required />
+                                                <Input label="Category" value={productForm.category} onChange={e=>setProductForm({...productForm, category: e.target.value})} />
+                                                <div className="md:col-span-2"><Input label="Image URL" value={productForm.image} onChange={e=>setProductForm({...productForm, image: e.target.value})} /></div>
+                                                <div className="md:col-span-2 flex gap-3">
+                                                    <Button type="submit" className="flex-1">{editingId ? 'Update Product' : 'Create Product'}</Button>
+                                                </div>
                                             </form>
                                         </div>
                                     )}
 
-                                    {/* Product List */}
-                                    <div className="mb-8 overflow-x-auto">
-                                        <table className="min-w-full divide-y divide-gray-200">
-                                            <thead className="bg-gray-50">
-                                                <tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th><th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th></tr>
+                                    {/* Product Table */}
+                                    <div className="overflow-x-auto">
+                                        <table className="min-w-full text-sm">
+                                            <thead className="bg-gray-50 text-gray-500">
+                                                <tr><th className="px-4 py-2 text-left">Product</th><th className="px-4 py-2">Stock</th><th className="px-4 py-2">Price</th><th className="px-4 py-2 text-right">Actions</th></tr>
                                             </thead>
-                                            <tbody className="bg-white divide-y divide-gray-200">
+                                            <tbody className="divide-y divide-gray-100">
                                                 {products.map(p => (
-                                                    <tr key={p.id}>
-                                                        <td className="px-6 py-4 flex items-center gap-3"><img src={p.image} className="w-8 h-8 rounded bg-gray-100" />{p.name}</td>
-                                                        <td className="px-6 py-4"><span className={`px-2 py-1 rounded-full text-xs ${p.stock < 10 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>{p.stock} units</span></td>
-                                                        <td className="px-6 py-4 text-right"><button onClick={() => handleDeleteProduct(p.id)} className="text-red-600 hover:text-red-900 text-sm">Delete</button></td>
+                                                    <tr key={p.id} className="hover:bg-gray-50">
+                                                        <td className="px-4 py-3 font-medium">{p.name}</td>
+                                                        <td className="px-4 py-3 text-center">{p.stock}</td>
+                                                        <td className="px-4 py-3 text-center">${p.price}</td>
+                                                        <td className="px-4 py-3 text-right flex justify-end gap-2">
+                                                            <button onClick={() => handleEditClick(p)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Icons.Edit size={18} /></button>
+                                                            <button onClick={() => handleDeleteProduct(p.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Icons.Trash2 size={18} /></button>
+                                                        </td>
                                                     </tr>
                                                 ))}
                                             </tbody>
                                         </table>
                                     </div>
-
-                                    {/* Order Management */}
-                                    <div>
-                                        <h3 className="font-semibold text-gray-700 mb-4">Orders</h3>
-                                        <div className="space-y-4">
-                                            {orders.map(order => (
-                                                <div key={order.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                                                    <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
-                                                        <div>
-                                                            <div className="flex items-center gap-2 mb-1">
-                                                                <span className="font-bold">Order #{order.id.slice(0,6)}</span>
-                                                                <Badge color={order.status === 'received' || order.status === 'paid' ? 'green' : order.status === 'refunded' ? 'red' : 'yellow'}>{order.status.toUpperCase()}</Badge>
-                                                            </div>
-                                                            <p className="text-sm text-gray-500">by {order.userEmail}</p>
-                                                        </div>
-                                                        <div className="flex gap-2">
-                                                            <Button variant="success" className="!py-1 !text-xs" onClick={() => handleStatusChange(order.id, 'paid', order.userEmail)} disabled={order.status === 'paid'}>Mark Paid</Button>
-                                                            <Button variant="outline" className="!py-1 !text-xs" onClick={() => handleStatusChange(order.id, 'received', order.userEmail)} disabled={order.status === 'received'}>Received</Button>
-                                                            <Button variant="danger" className="!py-1 !text-xs" onClick={() => handleStatusChange(order.id, 'refunded', order.userEmail)} disabled={order.status === 'refunded'}>Refund</Button>
-                                                        </div>
+                                </div>
+                                
+                                {/* Orders List for Admin */}
+                                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                                    <h3 className="font-bold text-gray-700 mb-4">Recent Orders</h3>
+                                    <div className="space-y-4">
+                                        {orders.map(order => (
+                                            <div key={order.id} className="border p-4 rounded-lg flex flex-col md:flex-row justify-between gap-4">
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-bold text-sm">Order #{order.id.slice(0,5)}</span>
+                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${order.status==='paid'?'bg-green-100 text-green-800':'bg-yellow-100 text-yellow-800'}`}>{order.status}</span>
                                                     </div>
-                                                    <div className="bg-gray-100 rounded p-3 text-sm text-gray-600">
-                                                        <ul className="list-disc pl-4 space-y-1">{order.items?.map((item, idx) => <li key={idx}>{item.quantity}x {item.name}</li>)}</ul>
-                                                        <div className="mt-2 pt-2 border-t border-gray-200 font-bold text-right">Total: ${order.total}</div>
+                                                    <p className="text-xs text-gray-500 mt-1">{order.userEmail}</p>
+                                                    <div className="text-xs text-gray-600 mt-2">
+                                                        {order.items.map(i => <span key={i.productId} className="block">• {i.quantity}x {i.name}</span>)}
                                                     </div>
                                                 </div>
-                                            ))}
-                                            {orders.length === 0 && <p className="text-gray-500 italic">No orders yet.</p>}
-                                        </div>
+                                                <div className="flex gap-2 items-start">
+                                                    <Button variant="success" className="!py-1 !px-2 !text-xs" onClick={()=>handleStatusChange(order.id,'paid',order.userEmail)}>Paid</Button>
+                                                    <Button variant="danger" className="!py-1 !px-2 !text-xs" onClick={()=>handleStatusChange(order.id,'refunded',order.userEmail)}>Refund</Button>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
                         )}
-
-                        {view === 'admin' && !isAdmin && (
-                            <div className="text-center py-20">
-                                <h2 className="text-xl font-bold">Access Denied</h2>
-                                <Button onClick={() => setView('store')} className="mt-4">Back to Store</Button>
-                            </div>
-                        )}
+                        
+                        {view === 'admin' && !isAdmin && <div className="text-center py-20 text-red-500 font-bold">Access Denied</div>}
                     </main>
 
-                    {notifications.length > 0 && <NotificationToast message={notifications[0].message} onClose={() => setNotifications(prev => prev.slice(1))} />}
+                    {/* ADD TO CART POPUP */}
+                    <Modal isOpen={!!cartPopup} onClose={()=>setCartPopup(null)}>
+                        <div className="text-center">
+                            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600">
+                                <Icons.Check size={24} />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Item Added to Cart</h3>
+                            <p className="text-gray-500 mb-6">"{cartPopup}" has been added. Will that be all?</p>
+                            <div className="flex gap-3 flex-col sm:flex-row">
+                                <Button variant="secondary" onClick={()=>setCartPopup(null)} className="w-full">No, Continue</Button>
+                                <Button onClick={()=>{setCartPopup(null); setView('cart');}} className="w-full">Yes, Checkout</Button>
+                            </div>
+                        </div>
+                    </Modal>
+
+                    {notifications.map(n => <NotificationToast key={n.id} message={n.message} onClose={()=>setNotifications(p=>p.filter(x=>x.id!==n.id))} />)}
                 </div>
             );
         }
