@@ -69,6 +69,8 @@
             collection, 
             addDoc, 
             updateDoc, 
+            setDoc,
+            getDoc,
             doc, 
             onSnapshot, 
             query, 
@@ -90,9 +92,6 @@
             measurementId: "G-N1H3PFV1B5"
         };
         
-        // --- API CONFIGURATION ---
-        const CLOUDFLARE_WORKER_URL = "https://Order-worker.powerstudios.workers.dev"; 
-
         const app = initializeApp(firebaseConfig);
         const analytics = getAnalytics(app);
         const auth = getAuth(app);
@@ -159,31 +158,48 @@
             </div>
         );
 
+        const TextArea = ({ label, value, onChange, placeholder, required = false }) => (
+            <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
+                <textarea
+                    value={value}
+                    onChange={onChange}
+                    placeholder={placeholder}
+                    required={required}
+                    rows="3"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white dark:bg-dark dark:text-white resize-none"
+                />
+            </div>
+        );
+
         const Modal = ({ isOpen, onClose, children, size = "md" }) => {
             if (!isOpen) return null;
             const sizeClasses = { md: "max-w-md", lg: "max-w-lg" };
             return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-                    <div className={`bg-white dark:bg-dark rounded-2xl shadow-2xl w-full ${sizeClasses[size]} p-8 animate-scale-in relative overflow-hidden dark:text-white`}>
+                    <div className={`bg-white dark:bg-dark rounded-2xl shadow-2xl w-full ${sizeClasses[size]} p-8 animate-scale-in relative overflow-hidden dark:text-white max-h-[90vh] overflow-y-auto`}>
                         {children}
                     </div>
                 </div>
             );
         };
 
-        const NotificationToast = ({ message, onClose }) => {
+        const NotificationToast = ({ message, type = 'info', onClose }) => {
             useEffect(() => {
                 const timer = setTimeout(onClose, 5000);
                 return () => clearTimeout(timer);
             }, [onClose]);
 
+            const bgClass = type === 'error' ? 'bg-red-50 border-red-500 dark:bg-red-900/30' : 'bg-white border-blue-500 dark:bg-dark';
+            const iconColor = type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400';
+
             return (
-                <div className="fixed bottom-4 right-4 bg-white dark:bg-dark shadow-lg rounded-lg p-4 flex items-center gap-3 border-l-4 border-blue-500 animate-slide-up z-50 max-w-sm">
-                    <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full">
-                        <Icons.Mail size={20} className="text-blue-600 dark:text-blue-400" />
+                <div className={`fixed bottom-4 right-4 shadow-lg rounded-lg p-4 flex items-center gap-3 border-l-4 animate-slide-up z-50 max-w-sm ${bgClass}`}>
+                    <div className={`p-2 rounded-full ${type === 'error' ? 'bg-red-100 dark:bg-red-900/50' : 'bg-blue-100 dark:bg-blue-900/30'}`}>
+                        {type === 'error' ? <Icons.XCircle size={20} className={iconColor} /> : <Icons.Mail size={20} className={iconColor} />}
                     </div>
                     <div>
-                        <h4 className="font-semibold text-sm text-gray-900 dark:text-white">Notification</h4>
+                        <h4 className="font-semibold text-sm text-gray-900 dark:text-white">{type === 'error' ? 'Error' : 'Notification'}</h4>
                         <p className="text-xs text-gray-600 dark:text-gray-400">{message}</p>
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 ml-2">
@@ -211,7 +227,7 @@
             // Popups
             const [cartPopup, setCartPopup] = useState(null); 
             const [checkoutSuccess, setCheckoutSuccess] = useState(null);
-            const [errorPopup, setErrorPopup] = useState(null); // Replaces alert()
+            const [errorPopup, setErrorPopup] = useState(null); 
 
             // Login State
             const [email, setEmail] = useState('');
@@ -223,6 +239,12 @@
             const [productForm, setProductForm] = useState({ name: '', price: '', stock: '', image: '', category: '' });
             const [editingId, setEditingId] = useState(null); 
             const [isFormOpen, setIsFormOpen] = useState(false);
+            const [storeSettings, setStoreSettings] = useState({ announcement: '', checkoutPrompt: '' });
+            const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+            // User Checkout State
+            const [userNote, setUserNote] = useState(''); // "Message to Seller"
+            const [customFieldResponse, setCustomFieldResponse] = useState(''); // Response to Admin's prompt
 
             const isAdmin = user?.email === ADMIN_EMAIL;
 
@@ -258,7 +280,12 @@
                     setOrders(items);
                 });
 
-                return () => { unsubProducts(); unsubOrders(); };
+                // Load Settings (Announcement etc)
+                const unsubSettings = onSnapshot(doc(db, 'settings', 'config'), (doc) => {
+                    if (doc.exists()) setStoreSettings(doc.data());
+                });
+
+                return () => { unsubProducts(); unsubOrders(); unsubSettings(); };
             }, [user, isAdmin]);
 
             const categories = useMemo(() => {
@@ -290,26 +317,6 @@
                 catch (err) { setAuthError("Google Sign-In failed."); }
             };
 
-            const triggerEmail = async (to, subject, htmlContent) => {
-                setNotifications(p => [...p, { id: Date.now(), message: `Sending confirmation email to ${to}...` }]);
-
-                try {
-                    const res = await fetch(CLOUDFLARE_WORKER_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ to, subject, html: htmlContent })
-                    });
-                    
-                    if (!res.ok) {
-                        console.warn("Worker returned error:", await res.text());
-                    } else {
-                        console.log("Email request sent successfully to worker.");
-                    }
-                } catch (e) {
-                    console.warn("Failed to reach Cloudflare Worker:", e);
-                }
-            };
-
             const addToCart = (product) => {
                 if (product.stock <= (cart[product.id] || 0)) {
                     setErrorPopup("No more stock available for this item!");
@@ -339,6 +346,12 @@
             const handleCheckout = async () => {
                 if (!user) return;
                 
+                // Validate Custom Field if set by admin
+                if (storeSettings.checkoutPrompt && !customFieldResponse.trim()) {
+                    setErrorPopup(`Please fill in: "${storeSettings.checkoutPrompt}" to continue.`);
+                    return;
+                }
+
                 const orderItems = Object.entries(cart)
                     .map(([id, qty]) => {
                         const product = products.find(p => p.id === id);
@@ -352,32 +365,23 @@
 
                 try {
                     await runTransaction(db, async (t) => {
-                        // 1. Prepare all READS first (Required by Firestore)
+                        // 1. Reads
                         const productRefs = orderItems.map(item => doc(db, 'products', item.productId));
                         const productSnaps = [];
-                        
-                        // We must await each get() inside the transaction context
                         for (const ref of productRefs) {
                             productSnaps.push(await t.get(ref));
                         }
 
-                        // 2. Perform Logic & Writes
+                        // 2. Logic
                         productSnaps.forEach((snap, index) => {
                             const item = orderItems[index];
-                            if (!snap.exists()) {
-                                throw new Error(`Product "${item.name}" has been removed.`);
-                            }
-                            
+                            if (!snap.exists()) throw new Error(`Product "${item.name}" has been removed.`);
                             const currentStock = snap.data().stock;
-                            if (currentStock < item.quantity) {
-                                throw new Error(`Insufficient stock for "${item.name}". Only ${currentStock} left.`);
-                            }
-                            
-                            // Queue update
+                            if (currentStock < item.quantity) throw new Error(`Insufficient stock for "${item.name}". Only ${currentStock} left.`);
                             t.update(productRefs[index], { stock: currentStock - item.quantity });
                         });
 
-                        // Queue creation
+                        // 3. Writes
                         const newOrderRef = doc(collection(db, 'orders'));
                         t.set(newOrderRef, {
                             userId: user.uid,
@@ -386,30 +390,35 @@
                             total: total,
                             status: 'pending_payment',
                             paymentMethod: 'counter',
+                            note: userNote, // Message to seller
+                            customResponse: customFieldResponse, // Admin's form answer
+                            customPromptLabel: storeSettings.checkoutPrompt, // Save what the question was
                             createdAt: serverTimestamp()
                         });
                     });
                     
                     setCart({});
+                    setUserNote('');
+                    setCustomFieldResponse('');
                     setView('store');
                     setCheckoutSuccess({ total }); 
-                    
-                    triggerEmail(user.email, "Order Confirmation - Order.Now", `
-                        <h1>Order Confirmation</h1>
-                        <p>Thank you for your order!</p>
-                        <p>Total Due: <strong>$${total.toFixed(2)}</strong></p>
-                        <p>Please proceed to the counter to complete your payment.</p>
-                        <hr />
-                        <p style="font-size: 12px; color: #666;">This is an automated message from Order.Now</p>
-                    `);
 
                 } catch (e) {
-                    // Use Popup instead of alert
                     setErrorPopup(e.message || "An unexpected error occurred during checkout.");
                 }
             };
 
             // --- Admin Handlers ---
+            const handleSaveSettings = async (e) => {
+                e.preventDefault();
+                if (!isAdmin) return;
+                try {
+                    await setDoc(doc(db, 'settings', 'config'), storeSettings);
+                    setIsSettingsOpen(false);
+                    setNotifications(p => [...p, { id: Date.now(), message: "Settings Updated", type: 'info' }]);
+                } catch (e) { setErrorPopup("Failed to save settings"); }
+            };
+
             const handleSaveProduct = async (e) => {
                 e.preventDefault();
                 if (!isAdmin) return;
@@ -442,21 +451,10 @@
                 setIsFormOpen(false);
             };
 
-            const handleStatusChange = async (orderId, newStatus, email) => {
+            const handleStatusChange = async (orderId, newStatus) => {
                 if (!isAdmin) return;
                 try {
                     await updateDoc(doc(db, 'orders', orderId), { status: newStatus });
-                    
-                    let message = "";
-                    if (newStatus === 'paid') message = "Thank you for your payment! Your order is being processed.";
-                    else if (newStatus === 'refunded') message = "A refund has been processed for your order.";
-                    else message = `Your order status has been updated to: ${newStatus}`;
-
-                    triggerEmail(email, `Order Update: ${newStatus.toUpperCase()}`, `
-                        <h2>Order Update</h2>
-                        <p>${message}</p>
-                        <p>Status: <strong>${newStatus.toUpperCase()}</strong></p>
-                    `);
                 } catch (e) {
                     setErrorPopup("Failed to update status: " + e.message);
                 }
@@ -529,6 +527,14 @@
                     </nav>
 
                     <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        {/* ANNOUNCEMENT BANNER */}
+                        {storeSettings.announcement && (
+                            <div className="bg-blue-600 dark:bg-blue-800 text-white px-4 py-3 rounded-xl mb-6 shadow-md flex items-center animate-fade-in">
+                                <span className="font-medium mr-2">📢 Notice:</span>
+                                <span>{storeSettings.announcement}</span>
+                            </div>
+                        )}
+
                         {/* STORE */}
                         {view === 'store' && (
                             <div className="animate-fade-in space-y-6">
@@ -591,23 +597,53 @@
                             <div className="max-w-2xl mx-auto animate-fade-in">
                                 <h2 className="text-2xl font-bold mb-6 dark:text-white">Shopping Cart</h2>
                                 {Object.keys(cart).length === 0 ? <div className="text-center py-10 text-gray-500 dark:text-gray-400">Cart is empty</div> : (
-                                    <div className="bg-white dark:bg-dark rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                                        {Object.entries(cart).map(([id, qty]) => {
-                                            const p = products.find(x => x.id === id);
-                                            return p ? (
-                                                <div key={id} className="p-4 flex items-center gap-4 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                                                    <img src={p.image} className="w-16 h-16 rounded-lg object-cover bg-gray-100"/>
-                                                    <div className="flex-1"><h4 className="font-medium text-gray-900 dark:text-white">{p.name}</h4><p className="text-sm text-gray-500 dark:text-gray-400">${p.price}</p></div>
-                                                    <div className="flex items-center gap-3">
-                                                        <button onClick={()=>updateCartQuantity(id, -1)} className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center dark:text-white">-</button>
-                                                        <span className="w-6 text-center text-sm font-medium dark:text-white">{qty}</span>
-                                                        <button onClick={()=>updateCartQuantity(id, 1)} className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center dark:text-white">+</button>
+                                    <div className="space-y-6">
+                                        <div className="bg-white dark:bg-dark rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                                            {Object.entries(cart).map(([id, qty]) => {
+                                                const p = products.find(x => x.id === id);
+                                                return p ? (
+                                                    <div key={id} className="p-4 flex items-center gap-4 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                                                        <img src={p.image} className="w-16 h-16 rounded-lg object-cover bg-gray-100"/>
+                                                        <div className="flex-1"><h4 className="font-medium text-gray-900 dark:text-white">{p.name}</h4><p className="text-sm text-gray-500 dark:text-gray-400">${p.price}</p></div>
+                                                        <div className="flex items-center gap-3">
+                                                            <button onClick={()=>updateCartQuantity(id, -1)} className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center dark:text-white">-</button>
+                                                            <span className="w-6 text-center text-sm font-medium dark:text-white">{qty}</span>
+                                                            <button onClick={()=>updateCartQuantity(id, 1)} className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center dark:text-white">+</button>
+                                                        </div>
+                                                        <div className="text-right w-20 font-bold text-gray-900 dark:text-white">${(p.price*qty).toFixed(2)}</div>
                                                     </div>
-                                                    <div className="text-right w-20 font-bold text-gray-900 dark:text-white">${(p.price*qty).toFixed(2)}</div>
+                                                ) : null;
+                                            })}
+                                        </div>
+
+                                        {/* USER INPUTS SECTION */}
+                                        <div className="bg-white dark:bg-dark p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-4">
+                                            <h3 className="font-bold text-gray-900 dark:text-white">Order Details</h3>
+                                            
+                                            {/* Message to Seller */}
+                                            <TextArea 
+                                                label="Message to Seller (Optional)" 
+                                                placeholder="e.g., No ice, Allergic to peanuts..." 
+                                                value={userNote}
+                                                onChange={e => setUserNote(e.target.value)}
+                                            />
+
+                                            {/* Custom Admin Prompt (if set) */}
+                                            {storeSettings.checkoutPrompt && (
+                                                <div className="animate-fade-in">
+                                                    <Input 
+                                                        label={`${storeSettings.checkoutPrompt} (Required)`}
+                                                        placeholder="Your answer here..."
+                                                        value={customFieldResponse}
+                                                        onChange={e => setCustomFieldResponse(e.target.value)}
+                                                        required
+                                                    />
                                                 </div>
-                                            ) : null;
-                                        })}
-                                        <div className="bg-gray-50 dark:bg-gray-800 p-6 flex justify-between items-center">
+                                            )}
+                                        </div>
+
+                                        {/* TOTAL & CHECKOUT */}
+                                        <div className="bg-white dark:bg-dark p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex justify-between items-center">
                                             <div><p className="text-gray-500 dark:text-gray-400 text-sm">Total</p><p className="text-3xl font-bold text-gray-900 dark:text-white">${Object.entries(cart).reduce((acc,[id,q])=>{const p=products.find(x=>x.id===id);return acc+(p?p.price*q:0)},0).toFixed(2)}</p></div>
                                             <Button onClick={handleCheckout} className="px-8">Checkout</Button>
                                         </div>
@@ -616,7 +652,7 @@
                             </div>
                         )}
 
-                        {/* ORDER HISTORY (CUSTOMER) */}
+                        {/* ORDER HISTORY */}
                         {view === 'history' && !isAdmin && (
                             <div className="max-w-3xl mx-auto animate-fade-in">
                                 <h2 className="text-2xl font-bold mb-6 dark:text-white flex items-center gap-2"><Icons.History /> My Orders</h2>
@@ -639,6 +675,15 @@
                                                 </div>
                                                 <p className="text-xl font-bold text-gray-900 dark:text-white">${order.total}</p>
                                             </div>
+                                            
+                                            {/* Show user notes in history */}
+                                            {(order.note || order.customResponse) && (
+                                                <div className="mb-4 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg text-sm">
+                                                    {order.note && <p><span className="font-semibold text-gray-700 dark:text-gray-300">Note:</span> <span className="text-gray-600 dark:text-gray-400">{order.note}</span></p>}
+                                                    {order.customResponse && <p><span className="font-semibold text-gray-700 dark:text-gray-300">{order.customPromptLabel || 'Info'}:</span> <span className="text-gray-600 dark:text-gray-400">{order.customResponse}</span></p>}
+                                                </div>
+                                            )}
+
                                             <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
                                                 {order.items.map(item => (
                                                     <div key={item.productId} className="flex justify-between text-sm py-1">
@@ -660,27 +705,47 @@
                                 <div className="bg-white dark:bg-dark p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                                     <div className="flex justify-between items-center mb-6">
                                         <h2 className="text-xl font-bold flex items-center gap-2 dark:text-white"><Icons.LayoutDashboard /> Dashboard</h2>
-                                        <Button onClick={() => { closeForm(); setIsFormOpen(!isFormOpen); }} variant="outline">
-                                            {isFormOpen ? 'Cancel' : 'Add Product'}
-                                        </Button>
+                                        <div className="flex gap-2">
+                                            <Button onClick={() => setIsSettingsOpen(true)} variant="secondary">Store Settings</Button>
+                                            <Button onClick={() => { closeForm(); setIsFormOpen(true); }} variant="primary">Add Product</Button>
+                                        </div>
                                     </div>
 
-                                    {/* Edit/Add Form */}
-                                    {isFormOpen && (
-                                        <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-xl mb-8 border border-gray-200 dark:border-gray-700 animate-slide-up">
-                                            <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-4">{editingId ? 'Edit Product' : 'Add New Product'}</h3>
-                                            <form onSubmit={handleSaveProduct} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <Input label="Name" value={productForm.name} onChange={e=>setProductForm({...productForm, name: e.target.value})} required />
+                                    {/* STORE SETTINGS MODAL */}
+                                    <Modal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}>
+                                        <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-4">Store Settings</h3>
+                                        <form onSubmit={handleSaveSettings} className="space-y-4">
+                                            <Input 
+                                                label="Announcement Banner (Empty to hide)" 
+                                                value={storeSettings.announcement} 
+                                                onChange={e => setStoreSettings({...storeSettings, announcement: e.target.value})} 
+                                                placeholder="e.g. Closing at 8 PM today"
+                                            />
+                                            <Input 
+                                                label="Checkout Prompt Question (Empty to disable)" 
+                                                value={storeSettings.checkoutPrompt} 
+                                                onChange={e => setStoreSettings({...storeSettings, checkoutPrompt: e.target.value})} 
+                                                placeholder="e.g. What is your Table Number?"
+                                            />
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">If set, users *must* answer this question to checkout.</p>
+                                            <Button type="submit" className="w-full">Save Settings</Button>
+                                        </form>
+                                    </Modal>
+
+                                    {/* ADD/EDIT PRODUCT MODAL */}
+                                    <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)}>
+                                        <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-4">{editingId ? 'Edit Product' : 'Add New Product'}</h3>
+                                        <form onSubmit={handleSaveProduct} className="grid grid-cols-1 gap-4">
+                                            <Input label="Name" value={productForm.name} onChange={e=>setProductForm({...productForm, name: e.target.value})} required />
+                                            <div className="grid grid-cols-2 gap-4">
                                                 <Input label="Price" type="number" value={productForm.price} onChange={e=>setProductForm({...productForm, price: e.target.value})} required />
                                                 <Input label="Stock" type="number" value={productForm.stock} onChange={e=>setProductForm({...productForm, stock: e.target.value})} required />
-                                                <Input label="Category" value={productForm.category} onChange={e=>setProductForm({...productForm, category: e.target.value})} />
-                                                <div className="md:col-span-2"><Input label="Image URL" value={productForm.image} onChange={e=>setProductForm({...productForm, image: e.target.value})} /></div>
-                                                <div className="md:col-span-2 flex gap-3">
-                                                    <Button type="submit" className="flex-1">{editingId ? 'Update Product' : 'Create Product'}</Button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    )}
+                                            </div>
+                                            <Input label="Category" value={productForm.category} onChange={e=>setProductForm({...productForm, category: e.target.value})} />
+                                            <Input label="Image URL" value={productForm.image} onChange={e=>setProductForm({...productForm, image: e.target.value})} />
+                                            <Button type="submit" className="w-full">{editingId ? 'Update' : 'Create'}</Button>
+                                        </form>
+                                    </Modal>
 
                                     {/* Product Table */}
                                     <div className="overflow-x-auto mb-8">
@@ -708,20 +773,32 @@
                                     <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4">Recent Orders</h3>
                                     <div className="space-y-4">
                                         {orders.map(order => (
-                                            <div key={order.id} className="border dark:border-gray-700 p-4 rounded-lg flex flex-col md:flex-row justify-between gap-4">
-                                                <div>
+                                            <div key={order.id} className="border dark:border-gray-700 p-4 rounded-lg flex flex-col md:flex-row justify-between gap-4 bg-gray-50 dark:bg-gray-800/50">
+                                                <div className="flex-1">
                                                     <div className="flex items-center gap-2">
                                                         <span className="font-bold text-sm dark:text-white">Order #{order.id.slice(0,5)}</span>
-                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${order.status==='paid'?'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400':'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'}`}>{order.status}</span>
+                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${order.status==='paid'?'bg-green-100 text-green-800':'bg-yellow-100 text-yellow-800'}`}>{order.status}</span>
                                                     </div>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{order.userEmail}</p>
-                                                    <div className="text-xs text-gray-600 dark:text-gray-300 mt-2">
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{order.userEmail} • {new Date(order.createdAt?.seconds * 1000).toLocaleString()}</p>
+                                                    
+                                                    {/* Admin View of Notes */}
+                                                    {(order.note || order.customResponse) && (
+                                                        <div className="mt-3 bg-white dark:bg-dark p-3 rounded border border-yellow-200 dark:border-yellow-900/50">
+                                                            {order.note && <p className="text-sm"><strong className="text-yellow-600 dark:text-yellow-500">Note from User:</strong> {order.note}</p>}
+                                                            {order.customResponse && <p className="text-sm"><strong className="text-blue-600 dark:text-blue-400">{order.customPromptLabel || 'Info'}:</strong> {order.customResponse}</p>}
+                                                        </div>
+                                                    )}
+
+                                                    <div className="text-xs text-gray-600 dark:text-gray-300 mt-2 pl-2 border-l-2 border-gray-300 dark:border-gray-600">
                                                         {order.items.map(i => <span key={i.productId} className="block">• {i.quantity}x {i.name}</span>)}
                                                     </div>
                                                 </div>
-                                                <div className="flex gap-2 items-start">
-                                                    <Button variant="success" className="!py-1 !px-2 !text-xs" onClick={()=>handleStatusChange(order.id,'paid',order.userEmail)}>Paid</Button>
-                                                    <Button variant="danger" className="!py-1 !px-2 !text-xs" onClick={()=>handleStatusChange(order.id,'refunded',order.userEmail)}>Refund</Button>
+                                                <div className="flex flex-col gap-2 min-w-[100px]">
+                                                    <div className="text-right font-bold text-lg dark:text-white">${order.total}</div>
+                                                    <div className="flex gap-1 justify-end">
+                                                        <Button variant="success" className="!py-1 !px-2 !text-xs" onClick={()=>handleStatusChange(order.id,'paid')}>Paid</Button>
+                                                        <Button variant="danger" className="!py-1 !px-2 !text-xs" onClick={()=>handleStatusChange(order.id,'refunded')}>Refund</Button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
@@ -773,7 +850,7 @@
                         </div>
                     </Modal>
 
-                    {/* ERROR MODAL (Replaces Alerts) */}
+                    {/* ERROR MODAL */}
                     <Modal isOpen={!!errorPopup} onClose={()=>setErrorPopup(null)}>
                         <div className="text-center">
                             <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600 dark:text-red-400">
@@ -785,7 +862,7 @@
                         </div>
                     </Modal>
 
-                    {notifications.map(n => <NotificationToast key={n.id} message={n.message} onClose={()=>setNotifications(p=>p.filter(x=>x.id!==n.id))} />)}
+                    {notifications.map(n => <NotificationToast key={n.id} message={n.message} type={n.type} onClose={()=>setNotifications(p=>p.filter(x=>x.id!==n.id))} />)}
                 </div>
             );
         }
