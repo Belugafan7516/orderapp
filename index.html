@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>order.now</title>
+    <title>Order.Now</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -37,8 +37,9 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        // --- Firebase Imports (ES Modules) ---
+        // --- Firebase Imports (CDN for browser usage) ---
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+        import { getAnalytics } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js';
         import { 
             getAuth, 
             signInWithPopup, 
@@ -46,9 +47,7 @@
             signOut, 
             onAuthStateChanged,
             createUserWithEmailAndPassword,
-            signInWithEmailAndPassword,
-            signInAnonymously,
-            signInWithCustomToken
+            signInWithEmailAndPassword
         } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
         import { 
             getFirestore, 
@@ -64,19 +63,24 @@
             deleteDoc
         } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
-        // --- Firebase Initialization ---
-        // Note: In a local environment, replace this block with your actual config object.
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : { /* Your config here if running locally */ apiKey: "demo-key", authDomain: "demo.firebaseapp.com", projectId: "demo" };
-            
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // --- User's Firebase Configuration ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyD5fscbqUTJIo0EKfz5mdi5qScQ8kiOhRs",
+            authDomain: "order-now-backend.firebaseapp.com",
+            projectId: "order-now-backend",
+            storageBucket: "order-now-backend.firebasestorage.app",
+            messagingSenderId: "895688155864",
+            appId: "1:895688155864:web:b623376af905cebb336dad",
+            measurementId: "G-N1H3PFV1B5"
+        };
 
+        // --- Initialization ---
         const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app); // Initialized as requested
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // --- Icons (Inline SVGs for single-file portability) ---
+        // --- Icons ---
         const Icons = {
             Store: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7"/></svg>,
             ShoppingCart: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>,
@@ -194,16 +198,6 @@
 
             // Auth & Data Listeners
             useEffect(() => {
-                // Initialize Auth
-                const initAuth = async () => {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        try {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } catch(e) { console.error("Token auth failed", e)}
-                    }
-                };
-                initAuth();
-
                 const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
                     setUser(currentUser);
                     setLoading(false);
@@ -216,16 +210,16 @@
             useEffect(() => {
                 if (!user) return;
 
-                // Products Query
-                const productsQuery = query(collection(db, 'artifacts', appId, 'public', 'data', 'products'));
+                // Products Query (Using Root Collection 'products')
+                const productsQuery = query(collection(db, 'products'));
                 const unsubProducts = onSnapshot(productsQuery, (snapshot) => {
                     const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     setProducts(items);
                 }, (err) => console.error("Products error", err));
 
-                // Orders Query
+                // Orders Query (Using Root Collection 'orders')
                 const ordersQuery = query(
-                    collection(db, 'artifacts', appId, 'public', 'data', 'orders'),
+                    collection(db, 'orders'),
                     orderBy('createdAt', 'desc')
                 );
                 const unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
@@ -259,7 +253,7 @@
                     const provider = new GoogleAuthProvider();
                     await signInWithPopup(auth, provider);
                 } catch (err) {
-                    setAuthError("Google Sign-In failed or popup blocked.");
+                    setAuthError("Google Sign-In failed or popup blocked. Ensure the domain is authorized in Firebase Console.");
                 }
             };
 
@@ -320,7 +314,8 @@
                 try {
                     await runTransaction(db, async (transaction) => {
                         for (const item of orderItems) {
-                            const sfDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', item.productId);
+                            // Using Root Collection 'products'
+                            const sfDocRef = doc(db, 'products', item.productId);
                             const sfDoc = await transaction.get(sfDocRef);
                             if (!sfDoc.exists()) throw "Product does not exist!";
                             const newStock = sfDoc.data().stock - item.quantity;
@@ -328,7 +323,8 @@
                             transaction.update(sfDocRef, { stock: newStock });
                         }
 
-                        const orderRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'orders'));
+                        // Using Root Collection 'orders'
+                        const orderRef = doc(collection(db, 'orders'));
                         transaction.set(orderRef, {
                             userId: user.uid,
                             userEmail: user.email,
@@ -351,7 +347,7 @@
                 e.preventDefault();
                 if (!isAdmin) return;
                 try {
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'products'), {
+                    await addDoc(collection(db, 'products'), {
                         name: newProduct.name,
                         price: parseFloat(newProduct.price),
                         stock: parseInt(newProduct.stock),
@@ -367,7 +363,7 @@
             const handleStatusChange = async (orderId, newStatus, customerEmail) => {
                 if (!isAdmin) return;
                 try {
-                    const orderRef = doc(db, 'artifacts', appId, 'public', 'data', 'orders', orderId);
+                    const orderRef = doc(db, 'orders', orderId);
                     await updateDoc(orderRef, { status: newStatus });
                     let message = `Your order status is now: ${newStatus}`;
                     if (newStatus === 'refunded') message = "A refund has been initiated.";
@@ -378,7 +374,7 @@
             const handleDeleteProduct = async (productId) => {
                 if (!isAdmin) return;
                 if (confirm('Delete this product?')) {
-                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', productId));
+                    await deleteDoc(doc(db, 'products', productId));
                 }
             };
 
@@ -622,4 +618,5 @@
     </script>
 </body>
 </html>
+
 
